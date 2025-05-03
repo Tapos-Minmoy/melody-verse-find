@@ -25,19 +25,21 @@ const SongCard: React.FC<SongCardProps> = ({ song, index }) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: index * 0.1 }}
     >
-      <Card className="overflow-hidden">
-        <CardContent className="pt-6">
+      <Card className="overflow-hidden h-full flex flex-col">
+        <CardContent className="pt-6 flex-grow">
           <h3 className="text-xl font-semibold mb-1 line-clamp-1">{song.title}</h3>
           <p className="text-muted-foreground mb-3">{song.artist}</p>
           
           {song.snippet && (
-            <div className="bg-muted p-3 rounded-md text-sm italic mb-3">
-              "{song.snippet}"
+            <div className="bg-muted p-3 rounded-md text-sm italic mb-3 relative">
+              <div className="absolute -top-2 -left-1 text-lg text-muted-foreground">"</div>
+              <div className="ml-2">{song.snippet}</div>
+              <div className="absolute -bottom-2 -right-1 text-lg text-muted-foreground">"</div>
             </div>
           )}
         </CardContent>
         
-        <CardFooter className="border-t p-3 bg-muted/30">
+        <CardFooter className="border-t p-3 bg-muted/30 mt-auto">
           <Button 
             variant="outline" 
             size="sm"

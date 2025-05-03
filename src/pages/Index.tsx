@@ -4,8 +4,9 @@ import { toast } from "@/hooks/use-toast";
 import ChatInterface from "@/components/ChatInterface";
 import SongResults from "@/components/SongResults";
 import { Song } from "@/components/SongCard";
+import { fetchSongRecommendations } from "@/lib/api";
 
-// Mock data for development - will be replaced with actual API calls
+// Mock data for development until the backend is ready
 const mockSongs: Song[] = [
   {
     id: "1",
@@ -48,30 +49,20 @@ const Index = () => {
   const [songs, setSongs] = useState<Song[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // This function will be replaced with actual API call
   const handleSendMessage = async (message: string) => {
     setIsLoading(true);
     
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // For now, just use our mock data
-      setSongs(mockSongs);
-      
-      // Once we have an actual backend:
-      // const response = await fetch('/api/recommend', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({ chat: message }),
-      // });
-      // 
-      // if (!response.ok) throw new Error('Failed to fetch recommendations');
-      // const data = await response.json();
-      // setSongs(data);
-      
+      // For development, use mock data
+      // In production, we'll use the actual API
+      if (process.env.NODE_ENV === 'production') {
+        const recommendedSongs = await fetchSongRecommendations(message);
+        setSongs(recommendedSongs);
+      } else {
+        // Simulate API call delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setSongs(mockSongs);
+      }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       toast({
@@ -112,11 +103,19 @@ const Index = () => {
         
         {!isLoading && songs.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center">
+            <div className="text-center max-w-lg mx-auto">
               <h2 className="text-2xl font-bold mb-2">Welcome to MelodyVerse</h2>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground mb-4">
                 Ask about a song, mood, or lyrics in Bangla or Hindi to get recommendations
               </p>
+              <div className="text-sm bg-muted p-4 rounded-lg">
+                <h3 className="font-medium mb-2">Example phrases you can try:</h3>
+                <ul className="space-y-2 text-left">
+                  <li className="bg-primary/10 p-2 rounded">आज मैं उदास हूँ, कुछ दिल को छूने वाला गाना सुझाएं</li>
+                  <li className="bg-primary/10 p-2 rounded">প্রেমের গান খুঁজছি যেটা আমার মন ভালো করবে</li>
+                  <li className="bg-primary/10 p-2 rounded">तेरे बिना जीना कैसा जीना</li>
+                </ul>
+              </div>
             </div>
           </div>
         )}

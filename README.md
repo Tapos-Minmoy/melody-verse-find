@@ -1,73 +1,88 @@
-# Welcome to your Lovable project
 
-## Project info
+# MelodyVerse - Multilingual Song Recommendation System
 
-**URL**: https://lovable.dev/projects/592f0b1f-872d-4067-a691-5c760115ffc8
+MelodyVerse is a React-based web application that recommends songs in Bangla and Hindi based on user chat input.
 
-## How can I edit this code?
+## Project Structure
 
-There are several ways of editing your application.
+### Frontend (Current Repository)
 
-**Use Lovable**
+This repository contains the React frontend for MelodyVerse with the following structure:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/592f0b1f-872d-4067-a691-5c760115ffc8) and start prompting.
+- `src/components/`: UI components including Chat interface and Song cards
+- `src/lib/`: Utility functions and API client
+- `src/pages/`: Application pages
+- `public/`: Static assets
 
-Changes made via Lovable will be committed automatically to this repo.
+### Backend Implementation Requirements
 
-**Use your preferred IDE**
+The backend for this project should be implemented separately using:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **Tech Stack**:
+  - Python 3.10+ 
+  - FastAPI
+  - Uvicorn
+  - Sentence-transformers (model: "l3cube-pune/indic-sentence-similarity-sbert")
+  - Elasticsearch or Pinecone for vector database
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- **Data Sources**:
+  - Bangla: BanglaMusicStylo (GitHub)
+  - Hindi: SangeetLyrics API (RapidAPI) and Genius API
 
-Follow these steps:
+- **API Endpoint**:
+  The backend should expose a POST endpoint at `/api/recommend` that accepts:
+  ```json
+  {
+    "chat": "<user message in Bangla or Hindi>"
+  }
+  ```
+  
+  And returns an array of song objects:
+  ```json
+  [
+    {
+      "id": "song_id",
+      "title": "Song Title",
+      "artist": "Artist Name",
+      "snippet": "Matching lyric snippet",
+      "play_url": "URL to play the song"
+    }
+  ]
+  ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Backend Implementation Steps
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+1. **Data Ingestion**
+   - Download and process BanglaMusicStylo dataset
+   - Fetch Hindi lyrics from SangeetLyrics and Genius APIs
+   - Store song metadata in a structured format
 
-# Step 3: Install the necessary dependencies.
-npm i
+2. **Preprocessing**
+   - Normalize Unicode text
+   - Tokenize using indic-nlp-library
+   - Clean text by removing markers and punctuation
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+3. **Embedding & Indexing**
+   - Compute embeddings for each song and stanza
+   - Index in Elasticsearch or Pinecone
 
-**Edit a file directly in GitHub**
+4. **Retrieval Logic**
+   - Implement vector similarity search
+   - Rank results by relevance
+   - Return top 5 matches
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Deployment
 
-**Use GitHub Codespaces**
+1. **Frontend**: Currently hosted on [deployment URL]
+2. **Backend**: Should be deployed separately and the API URL updated in `src/lib/api.ts`
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Local Development
 
-## What technologies are used for this project?
+1. Clone this repository
+2. Install dependencies: `npm install`
+3. Start development server: `npm run dev`
+4. Access the app at: http://localhost:5173/
 
-This project is built with:
+## Backend Integration
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/592f0b1f-872d-4067-a691-5c760115ffc8) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Once the backend is deployed, update the API URL in `src/lib/api.ts` to point to your deployed FastAPI service.
