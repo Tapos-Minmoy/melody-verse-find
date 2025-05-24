@@ -1,8 +1,8 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play } from "lucide-react";
+import { Play, Music } from "lucide-react";
 import { motion } from "framer-motion";
 
 export interface Song {
@@ -11,6 +11,7 @@ export interface Song {
   artist: string;
   snippet?: string;
   playUrl: string;
+  lyrics?: string;
 }
 
 interface SongCardProps {
@@ -19,6 +20,8 @@ interface SongCardProps {
 }
 
 const SongCard: React.FC<SongCardProps> = ({ song, index }) => {
+  const [showLyrics, setShowLyrics] = useState(false);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -37,18 +40,36 @@ const SongCard: React.FC<SongCardProps> = ({ song, index }) => {
               <div className="absolute -bottom-2 -right-1 text-lg text-muted-foreground">"</div>
             </div>
           )}
+
+          {song.lyrics && showLyrics && (
+            <div className="bg-muted/50 p-3 rounded-md text-sm max-h-32 overflow-y-auto">
+              <h4 className="font-medium mb-2 text-xs uppercase tracking-wider">Lyrics</h4>
+              <pre className="whitespace-pre-wrap text-xs leading-relaxed">{song.lyrics}</pre>
+            </div>
+          )}
         </CardContent>
         
         <CardFooter className="border-t p-3 bg-muted/30 mt-auto">
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="ml-auto"
-            onClick={() => window.open(song.playUrl, "_blank")}
-          >
-            <Play className="mr-1 h-4 w-4" />
-            Play
-          </Button>
+          <div className="flex gap-2 ml-auto">
+            {song.lyrics && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowLyrics(!showLyrics)}
+              >
+                <Music className="mr-1 h-4 w-4" />
+                {showLyrics ? 'Hide' : 'Lyrics'}
+              </Button>
+            )}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.open(song.playUrl, "_blank")}
+            >
+              <Play className="mr-1 h-4 w-4" />
+              Play
+            </Button>
+          </div>
         </CardFooter>
       </Card>
     </motion.div>

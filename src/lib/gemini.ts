@@ -13,7 +13,11 @@ export interface EmotionAnalysis {
   emotion: string;
   intensity: number;
   keywords: string[];
-  recommendations: string[];
+  recommendations: Array<{
+    title: string;
+    artist: string;
+    lyrics?: string;
+  }>;
 }
 
 export async function analyzeEmotionWithGemini(text: string, apiKey: string): Promise<EmotionAnalysis> {
@@ -24,13 +28,25 @@ Please respond in the following JSON format only, without any markdown formattin
   "emotion": "primary emotion (happy, sad, romantic, nostalgic, energetic, calm, etc.)",
   "intensity": number between 1-10,
   "keywords": ["relevant", "emotional", "keywords"],
-  "recommendations": ["Song Title 1 by Artist 1", "Song Title 2 by Artist 2", "Song Title 3 by Artist 3"]
+  "recommendations": [
+    {
+      "title": "Song Title 1",
+      "artist": "Artist Name 1",
+      "lyrics": "First few lines of the song lyrics in original language"
+    },
+    {
+      "title": "Song Title 2", 
+      "artist": "Artist Name 2",
+      "lyrics": "First few lines of the song lyrics in original language"
+    }
+  ]
 }
 
 Important: 
 - Return only valid JSON without markdown code blocks
-- Keep recommendations as a simple array of strings
-- Each recommendation should be in format "Song Title by Artist Name"`;
+- Include actual lyrics (first 4-6 lines) for each song recommendation
+- Keep lyrics in the original language (Bangla/Hindi)
+- Provide 3-4 song recommendations with lyrics`;
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
@@ -48,7 +64,7 @@ Important:
           temperature: 0.3,
           topK: 1,
           topP: 1,
-          maxOutputTokens: 1024,
+          maxOutputTokens: 2048,
         },
         safetySettings: [
           {
@@ -93,32 +109,38 @@ Important:
       throw new Error('Invalid JSON in Gemini response');
     }
 
-    // Handle different response formats and normalize
+    // Normalize recommendations format
     let recommendations = [];
     if (Array.isArray(parsedResponse.recommendations)) {
-      recommendations = parsedResponse.recommendations;
-    } else if (typeof parsedResponse.recommendations === 'object') {
-      // Handle nested structure like { "Bangla": [...], "Hindi": [...] }
-      const banglaRecs = parsedResponse.recommendations.Bangla || [];
-      const hindiRecs = parsedResponse.recommendations.Hindi || [];
-      recommendations = [...banglaRecs, ...hindiRecs];
+      recommendations = parsedResponse.recommendations.map((rec: any) => {
+        if (typeof rec === 'string') {
+          // Handle old format "Song Title by Artist"
+          const parts = rec.split(' by ');
+          return {
+            title: parts[0] || rec,
+            artist: parts[1] || 'Unknown Artist',
+            lyrics: undefined
+          };
+        } else if (typeof rec === 'object') {
+          return {
+            title: rec.title || rec.song || 'Unknown Title',
+            artist: rec.artist || 'Unknown Artist',
+            lyrics: rec.lyrics
+          };
+        }
+        return {
+          title: String(rec),
+          artist: 'Unknown Artist',
+          lyrics: undefined
+        };
+      }).slice(0, 6);
     }
-
-    // Clean up recommendations to ensure they're simple strings
-    const cleanedRecommendations = recommendations.map((rec: any) => {
-      if (typeof rec === 'string') {
-        return rec;
-      } else if (typeof rec === 'object' && rec.song) {
-        return rec.song;
-      }
-      return String(rec);
-    }).slice(0, 6); // Limit to 6 recommendations
 
     return {
       emotion: parsedResponse.emotion || 'neutral',
       intensity: Number(parsedResponse.intensity) || 5,
       keywords: Array.isArray(parsedResponse.keywords) ? parsedResponse.keywords : [],
-      recommendations: cleanedRecommendations
+      recommendations
     };
   } catch (error) {
     console.error('Error analyzing emotion with Gemini:', error);

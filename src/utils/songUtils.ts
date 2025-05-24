@@ -1,12 +1,11 @@
 
 import { Song } from "@/components/SongCard";
 
-export const convertRecommendationsToSongs = (recommendations: string[]): Song[] => {
+export const convertRecommendationsToSongs = (recommendations: Array<{title: string; artist: string; lyrics?: string}>): Song[] => {
   return recommendations.map((rec, index) => {
-    // Try to parse "Song Title by Artist" format
-    const parts = rec.split(' by ');
-    const title = parts[0] || rec;
-    const artist = parts[1] || 'Unknown Artist';
+    // Clean up title and artist
+    const title = rec.title.replace(/^["']|["']$/g, ''); // Remove quotes
+    const artist = rec.artist.replace(/^["']|["']$/g, ''); // Remove quotes
     
     // Generate a YouTube search URL
     const searchQuery = encodeURIComponent(`${title} ${artist}`);
@@ -14,10 +13,11 @@ export const convertRecommendationsToSongs = (recommendations: string[]): Song[]
 
     return {
       id: `gemini-${Date.now()}-${index}`,
-      title: title.replace(/^["']|["']$/g, ''), // Remove quotes
-      artist: artist.replace(/^["']|["']$/g, ''), // Remove quotes
+      title,
+      artist,
       snippet: `Recommended based on your emotional state`,
-      playUrl
+      playUrl,
+      lyrics: rec.lyrics
     };
   });
 };
