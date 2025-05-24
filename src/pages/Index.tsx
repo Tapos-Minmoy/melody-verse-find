@@ -4,60 +4,13 @@ import { toast } from "@/hooks/use-toast";
 import ChatInterface from "@/components/ChatInterface";
 import SongResults from "@/components/SongResults";
 import ApiKeyInput from "@/components/ApiKeyInput";
+import EmotionAnalysisDisplay from "@/components/EmotionAnalysisDisplay";
+import LoadingState from "@/components/LoadingState";
+import WelcomeScreen from "@/components/WelcomeScreen";
 import { Song } from "@/components/SongCard";
 import { analyzeEmotionWithGemini, EmotionAnalysis } from "@/lib/gemini";
-
-// Enhanced mock songs based on emotions
-const emotionBasedSongs: Record<string, Song[]> = {
-  sad: [
-    {
-      id: "1",
-      title: "Tum Hi Ho",
-      artist: "Arijit Singh",
-      snippet: "तुम ही हो, तुम ही हो, तेरे बिन मैं कुछ भी नहीं हूँ",
-      playUrl: "https://www.youtube.com/watch?v=Umqb9KENgmk"
-    },
-    {
-      id: "2", 
-      title: "Boba Tunnel",
-      artist: "Anupam Roy",
-      snippet: "বোবা টানেল, বড় একা লাগে",
-      playUrl: "https://www.youtube.com/watch?v=0MrCh-gBPkE"
-    }
-  ],
-  happy: [
-    {
-      id: "3",
-      title: "Gerua",
-      artist: "Arijit Singh", 
-      snippet: "ओ खुदा मिलने दे उनको मेरी दुआ तू सुन ले",
-      playUrl: "https://www.youtube.com/watch?v=AEIVhBS6baE"
-    },
-    {
-      id: "4",
-      title: "Tomake Chai",
-      artist: "Arijit Singh",
-      snippet: "তোমাকে চাই, তোমাকে চাই, আর কিছুই নাই",
-      playUrl: "https://www.youtube.com/watch?v=example"
-    }
-  ],
-  romantic: [
-    {
-      id: "5",
-      title: "Raabta",
-      artist: "Arijit Singh",
-      snippet: "इक मुलाक़ात कहो या कहो नजर का मिलना",
-      playUrl: "https://www.youtube.com/watch?v=zAU_rsoS5ok"
-    },
-    {
-      id: "6",
-      title: "Ami Tomake",
-      artist: "Arijit Singh",
-      snippet: "আমি তোমাকে ভালোবাসি, চিরদিন তোমার থাকব পাশে",
-      playUrl: "https://www.youtube.com/watch?v=6JrQYV8apbU"
-    }
-  ]
-};
+import { emotionBasedSongs } from "@/data/emotionBasedSongs";
+import { convertRecommendationsToSongs } from "@/utils/songUtils";
 
 const Index = () => {
   const [songs, setSongs] = useState<Song[]>([]);
@@ -80,28 +33,6 @@ const Index = () => {
       setApiKey(savedApiKey);
     }
   }, []);
-
-  // Helper function to convert Gemini recommendations to Song objects
-  const convertRecommendationsToSongs = (recommendations: string[]): Song[] => {
-    return recommendations.map((rec, index) => {
-      // Try to parse "Song Title by Artist" format
-      const parts = rec.split(' by ');
-      const title = parts[0] || rec;
-      const artist = parts[1] || 'Unknown Artist';
-      
-      // Generate a YouTube search URL
-      const searchQuery = encodeURIComponent(`${title} ${artist}`);
-      const playUrl = `https://www.youtube.com/results?search_query=${searchQuery}`;
-
-      return {
-        id: `gemini-${Date.now()}-${index}`,
-        title: title.replace(/^["']|["']$/g, ''), // Remove quotes
-        artist: artist.replace(/^["']|["']$/g, ''), // Remove quotes
-        snippet: `Recommended based on your emotional state`,
-        playUrl
-      };
-    });
-  };
 
   const handleSendMessage = async (message: string) => {
     if (!apiKey) {
@@ -172,25 +103,7 @@ const Index = () => {
           <ApiKeyInput onApiKeySet={handleApiKeySet} currentApiKey={apiKey} />
           
           {emotionAnalysis && (
-            <div className="bg-muted p-3 rounded-md">
-              <h3 className="font-medium text-sm mb-1">Emotion Analysis</h3>
-              <p className="text-sm">
-                <span className="font-medium">{emotionAnalysis.emotion}</span> 
-                <span className="text-muted-foreground"> ({emotionAnalysis.intensity}/10)</span>
-              </p>
-              {emotionAnalysis.keywords.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-muted-foreground">Keywords:</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {emotionAnalysis.keywords.map((keyword, index) => (
-                      <span key={index} className="bg-primary/10 text-xs px-2 py-1 rounded">
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <EmotionAnalysisDisplay emotionAnalysis={emotionAnalysis} />
           )}
         </div>
         
@@ -202,33 +115,13 @@ const Index = () => {
       {/* Results Section */}
       <div className="md:w-2/3 p-6 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-2 text-muted-foreground">Analyzing emotions...</p>
-            </div>
-          </div>
+          <LoadingState />
         ) : (
           songs.length > 0 && <SongResults songs={songs} />
         )}
         
         {!isLoading && songs.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-lg mx-auto">
-              <h2 className="text-2xl font-bold mb-2">Welcome to MelodyVerse</h2>
-              <p className="text-muted-foreground mb-4">
-                Share your feelings in Bangla or Hindi and get personalized music recommendations based on AI emotion analysis
-              </p>
-              <div className="text-sm bg-muted p-4 rounded-lg">
-                <h3 className="font-medium mb-2">Example phrases you can try:</h3>
-                <ul className="space-y-2 text-left">
-                  <li className="bg-primary/10 p-2 rounded">आज मैं बहुत उदास हूँ और अकेला महसूस कर रहा हूँ</li>
-                  <li className="bg-primary/10 p-2 rounded">আজ আমার মন খুব খুশি, কিছু আনন্দের গান শুনতে চাই</li>
-                  <li className="bg-primary/10 p-2 rounded">I'm feeling nostalgic about my childhood memories</li>
-                </ul>
-              </div>
-            </div>
-          </div>
+          <WelcomeScreen />
         )}
       </div>
     </div>
