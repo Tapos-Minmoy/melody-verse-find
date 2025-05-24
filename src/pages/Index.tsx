@@ -81,6 +81,28 @@ const Index = () => {
     }
   }, []);
 
+  // Helper function to convert Gemini recommendations to Song objects
+  const convertRecommendationsToSongs = (recommendations: string[]): Song[] => {
+    return recommendations.map((rec, index) => {
+      // Try to parse "Song Title by Artist" format
+      const parts = rec.split(' by ');
+      const title = parts[0] || rec;
+      const artist = parts[1] || 'Unknown Artist';
+      
+      // Generate a YouTube search URL
+      const searchQuery = encodeURIComponent(`${title} ${artist}`);
+      const playUrl = `https://www.youtube.com/results?search_query=${searchQuery}`;
+
+      return {
+        id: `gemini-${Date.now()}-${index}`,
+        title: title.replace(/^["']|["']$/g, ''), // Remove quotes
+        artist: artist.replace(/^["']|["']$/g, ''), // Remove quotes
+        snippet: `Recommended based on your emotional state`,
+        playUrl
+      };
+    });
+  };
+
   const handleSendMessage = async (message: string) => {
     if (!apiKey) {
       toast({
@@ -98,21 +120,21 @@ const Index = () => {
       const analysis = await analyzeEmotionWithGemini(message, apiKey);
       setEmotionAnalysis(analysis);
       
-      // Get songs based on detected emotion
-      const emotion = analysis.emotion.toLowerCase();
-      let recommendedSongs = emotionBasedSongs[emotion] || [];
+      console.log('Emotion analysis result:', analysis);
       
-      // If no direct match, try to find similar emotions
-      if (recommendedSongs.length === 0) {
-        if (emotion.includes('sad') || emotion.includes('depressed') || emotion.includes('melancholy')) {
-          recommendedSongs = emotionBasedSongs.sad;
-        } else if (emotion.includes('happy') || emotion.includes('joy') || emotion.includes('energetic')) {
-          recommendedSongs = emotionBasedSongs.happy;
-        } else if (emotion.includes('love') || emotion.includes('romantic')) {
-          recommendedSongs = emotionBasedSongs.romantic;
+      // Convert Gemini recommendations to Song objects
+      let recommendedSongs: Song[] = [];
+      
+      if (analysis.recommendations && analysis.recommendations.length > 0) {
+        recommendedSongs = convertRecommendationsToSongs(analysis.recommendations);
+      } else {
+        // Fallback to mock data if no recommendations
+        const emotion = analysis.emotion.toLowerCase();
+        if (emotionBasedSongs[emotion]) {
+          recommendedSongs = emotionBasedSongs[emotion];
         } else {
-          // Default to all songs mixed
-          recommendedSongs = Object.values(emotionBasedSongs).flat().slice(0, 5);
+          // Default fallback
+          recommendedSongs = Object.values(emotionBasedSongs).flat().slice(0, 4);
         }
       }
 
@@ -129,6 +151,9 @@ const Index = () => {
         description: "Failed to analyze emotion. Please check your API key and try again.",
         variant: "destructive",
       });
+      
+      // Show fallback songs on error
+      setSongs(Object.values(emotionBasedSongs).flat().slice(0, 4));
     } finally {
       setIsLoading(false);
     }
