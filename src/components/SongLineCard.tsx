@@ -3,19 +3,23 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Check, Music, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Copy, Check, Music, BookOpen, ExternalLink,
+  ChevronDown, ChevronUp, Download,
+} from "lucide-react";
+
 import { toast } from "@/hooks/use-toast";
 import AudioPreview from "./AudioPreview";
 import { getYoutubeSearchUrl } from "@/lib/itunes";
 
 export interface SongLineResult {
   id: string;
+  type: "song" | "poem";
   title: string;
-  artist: string;
+  author: string;
   language: string;
   bestLine: string;
-  reason: string;
-  lyrics: string | null;
+  fullText: string | null;   // poem full text OR full lyrics
   artworkUrl: string | null;
   previewUrl: string | null;
   trackViewUrl: string | null;
@@ -29,22 +33,30 @@ interface SongLineCardProps {
 const SongLineCard: React.FC<SongLineCardProps> = ({ result, index }) => {
   const [copied, setCopied] = useState(false);
   const [copiedCredit, setCopiedCredit] = useState(false);
-  const [showLyrics, setShowLyrics] = useState(false);
+  const [showFull, setShowFull] = useState(false);
 
   const copyToClipboard = async (text: string, withCredit = false) => {
     await navigator.clipboard.writeText(text);
-    if (withCredit) {
-      setCopiedCredit(true);
-      setTimeout(() => setCopiedCredit(false), 2000);
-    } else {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    if (withCredit) { setCopiedCredit(true); setTimeout(() => setCopiedCredit(false), 2000); }
+    else             { setCopied(true);       setTimeout(() => setCopied(false), 2000); }
     toast({ title: "Copied!", description: "Ready to paste in your chat." });
   };
 
-  const playUrl = result.trackViewUrl ?? getYoutubeSearchUrl(result.title, result.artist);
-  const hasLine = result.bestLine.trim().length > 0;
+  const downloadPoem = () => {
+    const text = `${result.title}\n— ${result.author}\n\n${result.fullText ?? result.bestLine}`;
+    const blob  = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement("a");
+    a.href      = url;
+    a.download  = `${result.title} - ${result.author}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const isPoem    = result.type === "poem";
+  const hasLine   = result.bestLine.trim().length > 0;
+  const hasFull   = (result.fullText ?? "").trim().length > 0;
+  const playUrl   = result.trackViewUrl ?? getYoutubeSearchUrl(result.title, result.author);
 
   return (
     <motion.div
@@ -54,32 +66,41 @@ const SongLineCard: React.FC<SongLineCardProps> = ({ result, index }) => {
       className="h-full"
     >
       <Card className="flex flex-col h-full bg-card border shadow-sm hover:shadow-md transition-shadow">
-        {/* Song header */}
+
+        {/* Header */}
         <div className="flex gap-3 p-4 pb-3">
-          {result.artworkUrl ? (
+          {!isPoem && result.artworkUrl ? (
             <img
               src={result.artworkUrl}
               alt={result.title}
               className="w-14 h-14 rounded-lg object-cover shrink-0 shadow"
             />
           ) : (
-            <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center shrink-0">
-              <Music className="h-5 w-5 text-muted-foreground" />
+            <div className={`w-14 h-14 rounded-lg flex items-center justify-center shrink-0 ${isPoem ? "bg-amber-50 dark:bg-amber-950/30" : "bg-muted"}`}>
+              {isPoem
+                ? <BookOpen className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                : <Music className="h-6 w-6 text-muted-foreground" />}
             </div>
           )}
           <div className="flex-1 min-w-0 pt-0.5">
             <p className="font-semibold text-sm leading-tight line-clamp-1">{result.title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{result.artist}</p>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 mt-1.5 h-4">
-              {result.language}
-            </Badge>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{result.author}</p>
+            <div className="flex gap-1.5 mt-1.5 flex-wrap">
+              <Badge
+                variant="secondary"
+                className={`text-[10px] px-1.5 py-0 h-4 ${isPoem ? "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" : ""}`}
+              >
+                {isPoem ? "Poem / Kobita" : "Song"}
+              </Badge>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{result.language}</Badge>
+            </div>
           </div>
         </div>
 
         <CardContent className="flex-1 px-4 pb-3 pt-0 space-y-3">
-          {/* The lyric line */}
+          {/* Key line / excerpt */}
           {hasLine ? (
-            <div className="rounded-xl bg-primary/5 border border-primary/15 p-3.5 relative">
+            <div className={`rounded-xl p-3.5 relative border ${isPoem ? "bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800" : "bg-primary/5 border-primary/15"}`}>
               <span className="absolute top-2 left-3 text-2xl leading-none text-primary/25 font-serif select-none">&ldquo;</span>
               <p className="text-sm leading-relaxed whitespace-pre-line font-medium px-4 pt-1">
                 {result.bestLine}
@@ -88,33 +109,38 @@ const SongLineCard: React.FC<SongLineCardProps> = ({ result, index }) => {
             </div>
           ) : (
             <div className="rounded-xl bg-muted/60 border border-dashed p-3.5 text-center">
-              <p className="text-xs text-muted-foreground">Lyric line not available for this song.</p>
+              <p className="text-xs text-muted-foreground">Excerpt not available.</p>
             </div>
           )}
 
-          {/* 30s preview */}
-          {result.previewUrl && (
-            <AudioPreview previewUrl={result.previewUrl} />
+          {/* Audio preview (songs only) */}
+          {!isPoem && result.previewUrl && (
+            <AudioPreview previewUrl={result.previewUrl} title={result.title} author={result.author} />
+          )}
+          {!isPoem && !result.previewUrl && (
+            <p className="text-xs text-muted-foreground italic">No audio preview available.</p>
           )}
 
-          {/* Full lyrics toggle */}
-          {result.lyrics && (
+          {/* Full text toggle (poem full text OR song full lyrics) */}
+          {hasFull && (
             <div>
               <button
-                onClick={() => setShowLyrics(!showLyrics)}
+                onClick={() => setShowFull(!showFull)}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                {showLyrics ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                {showLyrics ? "Hide full lyrics" : "Show full lyrics"}
+                {showFull ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showFull
+                  ? `Hide ${isPoem ? "full poem" : "full lyrics"}`
+                  : `Show ${isPoem ? "full poem" : "full lyrics"}`}
               </button>
-              {showLyrics && (
+              {showFull && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
-                  className="mt-2 rounded-lg bg-muted/50 p-3 max-h-44 overflow-y-auto"
+                  className="mt-2 rounded-lg bg-muted/50 p-3 max-h-56 overflow-y-auto"
                 >
                   <pre className="text-xs whitespace-pre-wrap leading-relaxed text-foreground/80">
-                    {result.lyrics}
+                    {result.fullText}
                   </pre>
                 </motion.div>
               )}
@@ -122,7 +148,8 @@ const SongLineCard: React.FC<SongLineCardProps> = ({ result, index }) => {
           )}
         </CardContent>
 
-        <CardFooter className="px-4 pb-3 pt-0 gap-2">
+        <CardFooter className="px-4 pb-3 pt-0 gap-2 flex-wrap">
+          {/* Copy line */}
           <Button
             size="sm"
             className="flex-1 h-8 gap-1.5 text-xs"
@@ -132,25 +159,54 @@ const SongLineCard: React.FC<SongLineCardProps> = ({ result, index }) => {
             {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? "Copied!" : "Copy line"}
           </Button>
+
+          {/* Copy with credit */}
           <Button
             variant="outline"
             size="sm"
             className="flex-1 h-8 gap-1.5 text-xs"
             disabled={!hasLine}
-            onClick={() => copyToClipboard(`"${result.bestLine}"\n— ${result.title}, ${result.artist}`, true)}
+            onClick={() => copyToClipboard(`"${result.bestLine}"\n— ${result.title}, ${result.author}`, true)}
           >
             {copiedCredit ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             {copiedCredit ? "Copied!" : "With credit"}
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0"
-            onClick={() => window.open(playUrl, "_blank")}
-            title="Open in Apple Music or YouTube"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Button>
+
+          {/* Download poem / open YouTube for songs without preview */}
+          {isPoem ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={downloadPoem}
+              title="Download poem as .txt"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+          ) : !result.previewUrl ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => window.open(playUrl, "_blank")}
+              title="Open on YouTube"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+
+          {/* External link (songs only) */}
+          {!isPoem && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => window.open(playUrl, "_blank")}
+              title="Open in Apple Music / YouTube"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </CardFooter>
       </Card>
     </motion.div>

@@ -4,11 +4,13 @@ interface GeminiResponse {
   }>;
 }
 
-export interface SuggestedSong {
+export interface SuggestedContent {
+  type: "song" | "poem";
   title: string;
-  artist: string;
+  author: string;        // artist for songs, poet name for poems
   language: string;
-  suggestedLine: string;
+  suggestedLine: string; // key lyric or poem excerpt to display/copy
+  fullText?: string;     // full poem text (only for poems, provided by Gemini)
 }
 
 export interface EmotionAnalysis {
@@ -16,7 +18,7 @@ export interface EmotionAnalysis {
   intensity: number;
   keywords: string[];
   context: string;
-  suggestedSongs: SuggestedSong[];
+  suggestedSongs: SuggestedContent[];
 }
 
 // ── Single Gemini call: analyse conversation + suggest songs with lines ────────
@@ -31,7 +33,7 @@ export async function analyzeConversation(
       ? "Match the song language(s) to the conversation language (Hindi, Bangla, or English)."
       : `Suggest songs primarily in ${languageHint}.`;
 
-  const prompt = `You are a romantic music curator. Read this conversation between two people and suggest 3 real songs that perfectly capture the emotional moment.
+  const prompt = `You are a romantic content curator. Read this conversation between two people and suggest a mix of songs AND poems/kobita/shayari that capture the emotional moment.
 
 Conversation:
 """
@@ -40,28 +42,41 @@ ${conversation}
 
 ${languageInstruction}
 
-For each song, also provide the single most powerful 1–2 line(s) from its actual lyrics that would resonate with this moment — something a person could copy and send in chat.
+Return a mix of 2 songs and 1 poem (or 1 song and 2 poems) — whatever fits the emotion best.
+For songs: provide the most powerful 1–2 lyric lines someone could copy and send in chat.
+For poems/kobita/shayari: provide the full poem text (4–8 lines) and a key excerpt line.
 
 Respond ONLY with valid JSON (no markdown, no code blocks):
 {
-  "emotion": "relational emotion (e.g. longing, playful flirting, deep love, missing someone, making up after a fight, confessing feelings)",
+  "emotion": "relational emotion (longing, deep love, missing someone, making up, confessing feelings, etc.)",
   "intensity": <1-10>,
   "keywords": ["2-4 keywords"],
   "context": "one sentence describing the emotional moment",
   "suggestedSongs": [
     {
+      "type": "song",
       "title": "exact song title",
-      "artist": "exact artist name",
+      "author": "exact artist name",
       "language": "Hindi | Bangla | English",
-      "suggestedLine": "actual memorable lyric line from this song in its original language"
+      "suggestedLine": "actual lyric line from this song in its original language",
+      "fullText": null
+    },
+    {
+      "type": "poem",
+      "title": "poem or kobita title",
+      "author": "poet name",
+      "language": "Hindi | Bangla | English",
+      "suggestedLine": "the most beautiful line from this poem",
+      "fullText": "full poem text here, 4-8 lines, in original language"
     }
   ]
 }
 
 Rules:
-- Only suggest REAL, well-known songs that exist
-- suggestedLine must be actual lyrics from the song, not made up
-- Return exactly 3 songs`;
+- Songs must be REAL, well-known songs
+- Poems: classic or well-known kobita/shayari/rhymes (Rabindranath, Nazrul, Gulzar, Mirza Ghalib, etc.)
+- suggestedLine must be actual text, not invented
+- Return exactly 3 items total (mix of songs and poems)`;
 
   return parseAnalysis(await callGemini(prompt, apiKey));
 }
@@ -72,32 +87,44 @@ export async function analyzeMoodWithGemini(
   text: string,
   apiKey: string
 ): Promise<EmotionAnalysis> {
-  const prompt = `You are a music curator. Analyse this message and suggest 3 real songs in Hindi or Bangla (or English if the message is in English) that match the mood.
+  const prompt = `You are a romantic content curator. Analyse this message and suggest a mix of songs AND poems/kobita/shayari that match the mood.
 
 Message: "${text}"
 
-For each song, include the most memorable 1–2 lines from its actual lyrics.
+Return a mix — 2 songs and 1 poem, or 1 song and 2 poems — whatever fits best.
+For poems/kobita/shayari: provide the full text (4–8 lines) and a key line.
 
 Respond ONLY with valid JSON (no markdown, no code blocks):
 {
-  "emotion": "primary emotion (happy, sad, romantic, nostalgic, energetic, calm, etc.)",
+  "emotion": "primary emotion (happy, sad, romantic, nostalgic, longing, calm, etc.)",
   "intensity": <1-10>,
   "keywords": ["2-4 keywords"],
   "context": "brief description of the mood",
   "suggestedSongs": [
     {
+      "type": "song",
       "title": "exact song title",
-      "artist": "exact artist name",
+      "author": "exact artist name",
       "language": "Hindi | Bangla | English",
-      "suggestedLine": "actual memorable lyric line from this song"
+      "suggestedLine": "actual memorable lyric line",
+      "fullText": null
+    },
+    {
+      "type": "poem",
+      "title": "poem/kobita title",
+      "author": "poet name (e.g. Rabindranath Tagore, Gulzar, Mirza Ghalib, Kazi Nazrul Islam)",
+      "language": "Hindi | Bangla | English",
+      "suggestedLine": "the most beautiful line from this poem",
+      "fullText": "full poem text, 4-8 lines, in original language"
     }
   ]
 }
 
 Rules:
-- Only suggest REAL, well-known songs
-- suggestedLine must be actual lyrics, not invented
-- Return exactly 3 songs`;
+- Songs must be REAL and well-known
+- Poems: use classic poets — Tagore, Nazrul, Gulzar, Ghalib, Jibanananda Das, etc.
+- All text must be authentic, not invented
+- Return exactly 3 items total`;
 
   return parseAnalysis(await callGemini(prompt, apiKey));
 }
@@ -112,11 +139,13 @@ function parseAnalysis(raw: string): EmotionAnalysis {
     keywords: Array.isArray(json.keywords) ? json.keywords.map(String) : [],
     context: String(json.context ?? ""),
     suggestedSongs: Array.isArray(json.suggestedSongs)
-      ? (json.suggestedSongs as Array<Record<string, string>>).slice(0, 3).map((s) => ({
-          title: s.title ?? "Unknown",
-          artist: s.artist ?? "Unknown",
-          language: s.language ?? "Unknown",
-          suggestedLine: s.suggestedLine ?? "",
+      ? (json.suggestedSongs as Array<Record<string, unknown>>).slice(0, 3).map((s) => ({
+          type: (s.type === "poem" ? "poem" : "song") as "song" | "poem",
+          title: String(s.title ?? "Unknown"),
+          author: String(s.author ?? s.artist ?? "Unknown"),
+          language: String(s.language ?? "Unknown"),
+          suggestedLine: String(s.suggestedLine ?? ""),
+          fullText: s.fullText ? String(s.fullText) : undefined,
         }))
       : [],
   };

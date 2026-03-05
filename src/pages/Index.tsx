@@ -64,19 +64,36 @@ const Index = () => {
 
     const songResults = await Promise.all(
       analysis.suggestedSongs.map(async (s, i) => {
+        if (s.type === "poem") {
+          // Poems: no external API calls needed — Gemini provides the text
+          return {
+            id: `poem-${Date.now()}-${i}`,
+            type: "poem" as const,
+            title: s.title,
+            author: s.author,
+            language: s.language,
+            bestLine: s.suggestedLine,
+            fullText: s.fullText ?? null,
+            artworkUrl: null,
+            previewUrl: null,
+            trackViewUrl: null,
+          } satisfies SongLineResult;
+        }
+
+        // Songs: fetch iTunes metadata + lyrics in parallel
         const [track, lyrics] = await Promise.all([
-          searchTrack(s.title, s.artist),
-          fetchLyrics(s.artist, s.title),
+          searchTrack(s.title, s.author),
+          fetchLyrics(s.author, s.title),
         ]);
 
         return {
           id: `song-${Date.now()}-${i}`,
+          type: "song" as const,
           title: s.title,
-          artist: s.artist,
+          author: s.author,
           language: s.language,
           bestLine: s.suggestedLine,
-          reason: "",
-          lyrics: lyrics ?? null,
+          fullText: lyrics ?? null,
           artworkUrl: track?.artworkUrl100 ?? null,
           previewUrl: track?.previewUrl ?? null,
           trackViewUrl: track?.trackViewUrl ?? null,
