@@ -1,149 +1,158 @@
-
 interface GeminiResponse {
   candidates: Array<{
-    content: {
-      parts: Array<{
-        text: string;
-      }>;
-    };
+    content: { parts: Array<{ text: string }> };
   }>;
+}
+
+export interface SuggestedSong {
+  title: string;
+  artist: string;
+  language: string;
+  suggestedLine: string;
 }
 
 export interface EmotionAnalysis {
   emotion: string;
   intensity: number;
   keywords: string[];
-  recommendations: Array<{
-    title: string;
-    artist: string;
-    lyrics?: string;
-  }>;
+  context: string;
+  suggestedSongs: SuggestedSong[];
 }
 
-export async function analyzeEmotionWithGemini(text: string, apiKey: string): Promise<EmotionAnalysis> {
-  const prompt = `Analyze the emotional content of this text and provide song recommendations in Bangla and Hindi based on the emotions detected: "${text}"
+// ── Single Gemini call: analyse conversation + suggest songs with lines ────────
 
-Please respond in the following JSON format only, without any markdown formatting or code blocks:
+export async function analyzeConversation(
+  conversation: string,
+  apiKey: string,
+  languageHint: string = "auto"
+): Promise<EmotionAnalysis> {
+  const languageInstruction =
+    languageHint === "auto"
+      ? "Match the song language(s) to the conversation language (Hindi, Bangla, or English)."
+      : `Suggest songs primarily in ${languageHint}.`;
+
+  const prompt = `You are a romantic music curator. Read this conversation between two people and suggest 3 real songs that perfectly capture the emotional moment.
+
+Conversation:
+"""
+${conversation}
+"""
+
+${languageInstruction}
+
+For each song, also provide the single most powerful 1–2 line(s) from its actual lyrics that would resonate with this moment — something a person could copy and send in chat.
+
+Respond ONLY with valid JSON (no markdown, no code blocks):
 {
-  "emotion": "primary emotion (happy, sad, romantic, nostalgic, energetic, calm, etc.)",
-  "intensity": number between 1-10,
-  "keywords": ["relevant", "emotional", "keywords"],
-  "recommendations": [
+  "emotion": "relational emotion (e.g. longing, playful flirting, deep love, missing someone, making up after a fight, confessing feelings)",
+  "intensity": <1-10>,
+  "keywords": ["2-4 keywords"],
+  "context": "one sentence describing the emotional moment",
+  "suggestedSongs": [
     {
-      "title": "Song Title 1",
-      "artist": "Artist Name 1",
-      "lyrics": "First few lines of the song lyrics in original language"
-    },
-    {
-      "title": "Song Title 2", 
-      "artist": "Artist Name 2",
-      "lyrics": "First few lines of the song lyrics in original language"
+      "title": "exact song title",
+      "artist": "exact artist name",
+      "language": "Hindi | Bangla | English",
+      "suggestedLine": "actual memorable lyric line from this song in its original language"
     }
   ]
 }
 
-Important: 
-- Return only valid JSON without markdown code blocks
-- Include actual lyrics (first 4-6 lines) for each song recommendation
-- Keep lyrics in the original language (Bangla/Hindi)
-- Provide 3-4 song recommendations with lyrics`;
+Rules:
+- Only suggest REAL, well-known songs that exist
+- suggestedLine must be actual lyrics from the song, not made up
+- Return exactly 3 songs`;
 
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+  return parseAnalysis(await callGemini(prompt, apiKey));
+}
+
+// ── Single Gemini call: mood mode ─────────────────────────────────────────────
+
+export async function analyzeMoodWithGemini(
+  text: string,
+  apiKey: string
+): Promise<EmotionAnalysis> {
+  const prompt = `You are a music curator. Analyse this message and suggest 3 real songs in Hindi or Bangla (or English if the message is in English) that match the mood.
+
+Message: "${text}"
+
+For each song, include the most memorable 1–2 lines from its actual lyrics.
+
+Respond ONLY with valid JSON (no markdown, no code blocks):
+{
+  "emotion": "primary emotion (happy, sad, romantic, nostalgic, energetic, calm, etc.)",
+  "intensity": <1-10>,
+  "keywords": ["2-4 keywords"],
+  "context": "brief description of the mood",
+  "suggestedSongs": [
+    {
+      "title": "exact song title",
+      "artist": "exact artist name",
+      "language": "Hindi | Bangla | English",
+      "suggestedLine": "actual memorable lyric line from this song"
+    }
+  ]
+}
+
+Rules:
+- Only suggest REAL, well-known songs
+- suggestedLine must be actual lyrics, not invented
+- Return exactly 3 songs`;
+
+  return parseAnalysis(await callGemini(prompt, apiKey));
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseAnalysis(raw: string): EmotionAnalysis {
+  const json = extractJson(raw);
+  return {
+    emotion: String(json.emotion ?? "romantic"),
+    intensity: Number(json.intensity) || 7,
+    keywords: Array.isArray(json.keywords) ? json.keywords.map(String) : [],
+    context: String(json.context ?? ""),
+    suggestedSongs: Array.isArray(json.suggestedSongs)
+      ? (json.suggestedSongs as Array<Record<string, string>>).slice(0, 3).map((s) => ({
+          title: s.title ?? "Unknown",
+          artist: s.artist ?? "Unknown",
+          language: s.language ?? "Unknown",
+          suggestedLine: s.suggestedLine ?? "",
+        }))
+      : [],
+  };
+}
+
+async function callGemini(prompt: string, apiKey: string): Promise<string> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.3,
-          topK: 1,
-          topP: 1,
-          maxOutputTokens: 2048,
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE"
-          }
-        ]
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.5, maxOutputTokens: 1024 },
       }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
     }
+  );
 
-    const data: GeminiResponse = await response.json();
-    const textResponse = data.candidates[0]?.content?.parts[0]?.text;
-    
-    if (!textResponse) {
-      throw new Error('No response from Gemini API');
-    }
-
-    console.log('Raw Gemini response:', textResponse);
-
-    // Clean the response to extract JSON
-    let cleanedResponse = textResponse;
-    
-    // Remove markdown code blocks if present
-    cleanedResponse = cleanedResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    
-    // Extract JSON object
-    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No valid JSON found in Gemini response');
-    }
-
-    let parsedResponse;
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
     try {
-      parsedResponse = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Attempted to parse:', jsonMatch[0]);
-      throw new Error('Invalid JSON in Gemini response');
-    }
-
-    // Normalize recommendations format
-    let recommendations = [];
-    if (Array.isArray(parsedResponse.recommendations)) {
-      recommendations = parsedResponse.recommendations.map((rec: any) => {
-        if (typeof rec === 'string') {
-          // Handle old format "Song Title by Artist"
-          const parts = rec.split(' by ');
-          return {
-            title: parts[0] || rec,
-            artist: parts[1] || 'Unknown Artist',
-            lyrics: undefined
-          };
-        } else if (typeof rec === 'object') {
-          return {
-            title: rec.title || rec.song || 'Unknown Title',
-            artist: rec.artist || 'Unknown Artist',
-            lyrics: rec.lyrics
-          };
-        }
-        return {
-          title: String(rec),
-          artist: 'Unknown Artist',
-          lyrics: undefined
-        };
-      }).slice(0, 6);
-    }
-
-    return {
-      emotion: parsedResponse.emotion || 'neutral',
-      intensity: Number(parsedResponse.intensity) || 5,
-      keywords: Array.isArray(parsedResponse.keywords) ? parsedResponse.keywords : [],
-      recommendations
-    };
-  } catch (error) {
-    console.error('Error analyzing emotion with Gemini:', error);
-    throw error;
+      const errBody = await res.json();
+      detail = errBody?.error?.message ?? detail;
+    } catch { /* ignore */ }
+    throw new Error(detail);
   }
+
+  const data: GeminiResponse = await res.json();
+  const text = data.candidates[0]?.content?.parts[0]?.text;
+  if (!text) throw new Error("Empty response from Gemini");
+  return text;
+}
+
+function extractJson(text: string): Record<string, unknown> {
+  const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "");
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON in Gemini response");
+  return JSON.parse(match[0]);
 }
