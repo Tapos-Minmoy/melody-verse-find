@@ -40,6 +40,25 @@ const Index = () => {
     return true;
   };
 
+  const handleApiError = (err: unknown) => {
+    const msg = err instanceof Error ? err.message : "Something went wrong.";
+    if (msg === "QUOTA_EXCEEDED") {
+      toast({
+        title: "Quota exceeded",
+        description: "You've hit Gemini's free limit (15 req/min). Wait 1 minute then try again. Or enable billing at aistudio.google.com.",
+        variant: "destructive",
+      });
+    } else if (msg === "INVALID_KEY") {
+      toast({
+        title: "Invalid API key",
+        description: "Your Gemini API key was rejected. Open settings and paste it again from aistudio.google.com.",
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    }
+  };
+
   const runPipeline = async (analysis: EmotionAnalysis) => {
     setEmotion({ label: analysis.emotion, intensity: analysis.intensity });
 
@@ -78,7 +97,7 @@ const Index = () => {
       await runPipeline(analysis);
     } catch (err) {
       console.error(err);
-      toast({ title: "Error", description: err instanceof Error ? err.message : "Something went wrong.", variant: "destructive" });
+      handleApiError(err);
     } finally {
       setIsLoading(false);
     }
@@ -94,7 +113,7 @@ const Index = () => {
       await runPipeline(analysis);
     } catch (err) {
       console.error(err);
-      toast({ title: "Error", description: err instanceof Error ? err.message : "Something went wrong.", variant: "destructive" });
+      handleApiError(err);
     } finally {
       setIsLoading(false);
     }

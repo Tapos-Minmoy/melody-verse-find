@@ -122,9 +122,11 @@ function parseAnalysis(raw: string): EmotionAnalysis {
   };
 }
 
+const MODEL = "gemini-2.5-flash-lite";
+
 async function callGemini(prompt: string, apiKey: string): Promise<string> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,6 +143,9 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
       const errBody = await res.json();
       detail = errBody?.error?.message ?? detail;
     } catch { /* ignore */ }
+
+    if (res.status === 429) throw new Error("QUOTA_EXCEEDED");
+    if (res.status === 400 || res.status === 403) throw new Error("INVALID_KEY");
     throw new Error(detail);
   }
 
@@ -148,6 +153,32 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
   const text = data.candidates[0]?.content?.parts[0]?.text;
   if (!text) throw new Error("Empty response from Gemini");
   return text;
+}
+
+// Validate key with a minimal call
+export async function validateApiKey(
+  apiKey: string
+): Promise<{ ok: boolean; model?: string; error?: string }> {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: "Hi" }] }],
+          generationConfig: { maxOutputTokens: 5 },
+        }),
+      }
+    );
+
+    if (res.ok) return { ok: true, model: MODEL };
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message ?? `HTTP ${res.status}`;
+    return { ok: false, error: msg };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Network error" };
+  }
 }
 
 function extractJson(text: string): Record<string, unknown> {
